@@ -6,9 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "nest start --watch",
-    "build": "npx prisma generate --schema ./prisma/schema/schema.prisma && npx nest build",
-    "start": "npx prisma generate --schema ./prisma/schema/schema.prisma && npx prisma migrate deploy --schema ./prisma/schema/schema.prisma && node dist/src/main",
+    "dev": "node api.js && nest start --watch",
+    "build": "node api.js && npx prisma generate --schema ./prisma/schema/schema.prisma && npx nest build",
+    "start": "node api.js && npx prisma generate --schema ./prisma/schema/schema.prisma && npx prisma migrate deploy --schema ./prisma/schema/schema.prisma && node dist/src/main",
     "start:debug": "nest start --debug --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
