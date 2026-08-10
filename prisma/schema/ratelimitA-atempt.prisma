@@ -1,0 +1,12 @@
+model RateLimitAttempt {
+  id         String   @id @default(uuid())
+  identifier String // email:ip or just email/ip
+  action     String // login, signup, otp, password-reset
+  success    Boolean  @default(false)
+  metadata   Json? // Additional context (IP, user agent, etc.)
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, action, createdAt])
+  @@index([createdAt]) // For cleanup queries
+  @@map("rate_limit_attempts")
+}

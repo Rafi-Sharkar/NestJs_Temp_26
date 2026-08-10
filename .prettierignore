@@ -1,0 +1,8 @@
+node_modules
+dist
+prisma
+.pnpm-store
+coverage
+*.lock
+pnpm-lock.yaml
+package-lock.json

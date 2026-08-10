@@ -1,0 +1,174 @@
+enum ConversationType {
+  INDIVIDUAL
+  GROUP
+  AI
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  BLOCKED
+  REQUESTED
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageDeliveryStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum MessageMediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  OTHER
+}
+
+model Conversation {
+  id     String             @id @default(uuid())
+  type   ConversationType
+  status ConversationStatus @default(ACTIVE)
+
+  // For INDIVIDUAL conversations
+  user1Id       String?
+  user2Id       String?
+  user1         User?   @relation("User1Conversations", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2         User?   @relation("User2Conversations", fields: [user2Id], references: [id], onDelete: Cascade)
+  initiatedById String?
+
+  // For GROUP conversations
+  name        String?
+  description String?
+  avatarUrl   String?
+  members     ConversationMember[]
+  
+  lastMessageId String?  @unique
+  lastMessage   Message? @relation("LastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
+
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // call relations
+  calls Call[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([type])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model ConversationMember {
+  id             String     @id @default(uuid())
+  conversationId String
+  userId         String
+  role           MemberRole @default(MEMBER)
+  joinedAt       DateTime   @default(now())
+
+  isUnread   Boolean   @default(false)
+  isDeleted  Boolean   @default(false)
+  isPinned   Boolean   @default(false)
+  isMuted    Boolean   @default(false)
+  mutedUntil DateTime?
+  hasBlocked Boolean   @default(false)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+  @@index([role])
+}
+
+model Message {
+  id        String            @id @default(uuid())
+  content   String?
+  mediaUrl  String?
+  mediaType MessageMediaType?
+
+  conversationId String
+  senderId       String
+
+  statuses MessageStatus[]
+  isRead   Boolean         @default(false)
+  isUnsent Boolean         @default(false)
+
+  replyToId String?
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReplies")
+
+  forwardedFromId String?
+  forwardedFrom   Message?  @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
+  forwards        Message[] @relation("MessageForwards")
+
+  reactions MessageReaction[]
+  deletedBy MessageDeletion[]
+
+  lastMessageFor Conversation[] @relation("LastMessage")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([conversationId, createdAt]) // for paginated message fetching
+  @@index([isRead])
+}
+
+model MessageStatus {
+  id        String                @id @default(uuid())
+  messageId String
+  userId    String
+  status    MessageDeliveryStatus
+  updatedAt DateTime              @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([status])
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model MessageDeletion {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  deletedAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}

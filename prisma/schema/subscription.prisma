@@ -1,0 +1,67 @@
+model Plan {
+  id            String     @id @default(uuid())
+  price         String     @default("")
+  quantity      Int        @default(0)
+  bonusQuantity Int        @default(0)
+  planStatus    PlanStatus @default(ACTIVE)
+  isMostPopular Boolean    @default(false)
+
+  //--------- Relations-----------
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+
+  @@map("plans")
+}
+
+model Feature {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("features")
+}
+
+model Subscription {
+  id     String @id @default(uuid())
+  userId String @unique
+  planId String
+
+  status SubscriptionStatus @default(ACTIVE)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRING_TOMORROW
+  CANCELLED
+  EXPIRED
+}
+
+enum PlanName {
+  FREE
+  STARTER
+  STANDARD
+  PRO
+  ENTERPRISE
+  CUSTOM
+}
+
+enum PlanStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+}
+
+enum SubscriptionPlatform {
+  IOS
+  ANDROID
+}

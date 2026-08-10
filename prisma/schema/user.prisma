@@ -1,0 +1,112 @@
+model User {
+  id String @id @default(uuid())
+
+  // -----------Identity-----------
+  fullName  String?
+  name      String      @unique
+  email     String      @unique
+  password  String
+  biography String?
+  gender    GenderType?
+
+  // Social media links
+  provider     String  @default("google")
+  firebase_uid String? @unique
+
+  // Settings
+  role            UserRole   @default(USER)
+  userType        UserType?
+  isNormal        Boolean    @default(true)
+  isCreator       Boolean    @default(false)
+  isBrand         Boolean    @default(false)
+  status          UserStatus @default(ACTIVE)
+  isVerified      Boolean    @default(false)
+  isOnline        Boolean    @default(false)
+  isPhoneVerified Boolean    @default(false)
+
+
+  // follower following
+  isFollowing Boolean @default(false)
+  isBlocked   Boolean @default(false)
+
+  // Activity
+  lastLoginAt  DateTime?
+  lastActiveAt DateTime?
+
+  // Stripe (saved cards + marketplace payouts)
+  customerIdStripe     String? // Stripe Customer ID (this user as a payer)
+  sellerIdStripe       String? // Stripe Connect account ID (this user as a payee/brand/creator)
+  pendingSetupIntentId String? // SetupIntent created at signup, awaiting client confirmation to save a card
+
+  paymentsMade      Payment[]  @relation("PaymentsMade")
+  paymentsReceived  Payment[]  @relation("PaymentsReceived")
+  transfersReceived Transfer[] @relation("TransfersReceived")
+
+  // Notifications & Auth
+  notifications       UserNotification[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  otps                UserOtp[]
+
+  // profile photo relation
+  profilePhotoId String?       @unique
+  profilePhoto   FileInstance? @relation("UserProfilePhoto", fields: [profilePhotoId], references: [id])
+
+  // Subscription relations
+  subscription Subscription?
+
+  // ------------ notification toggle -----------
+  notificationToggle      NotificationToggle?
+
+  // Message-Conversation relations
+  user1Conversations Conversation[]       @relation("User1Conversations")
+  user2Conversations Conversation[]       @relation("User2Conversations")
+  conversationMember ConversationMember[]
+  message            Message[]
+  messageStatuse     MessageStatus[]
+  messageReactions   MessageReaction[]
+  messageDeletions   MessageDeletion[]
+
+  // call relations
+  initiatedCalls   Call[]            @relation("CallInitiator")
+  callParticipants CallParticipant[]
+
+  // Referral tracking
+  referredById  String?
+  referredBy    User?    @relation("UserReferredBy", fields: [referredById], references: [id])
+  referredUsers User[]   @relation("UserReferredBy")
+
+  // ---------------- Timestamps --------------------
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([fullName, email, name])
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  ANALYST
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+  BLOCKED
+}
+
+enum UserType {
+  NORMAL
+  CREATOR
+  BRAND
+}
+
+enum GenderType {
+  MALE
+  FEMALE
+  OTHER
+}

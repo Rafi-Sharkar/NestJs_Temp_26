@@ -1,0 +1,63 @@
+enum CallType {
+  VOICE
+  VIDEO
+}
+
+enum CallStatus {
+  INITIATED // caller is ringing
+  RINGING // callee is being notified
+  ACTIVE // call is ongoing
+  ENDED // call ended normally
+  MISSED // callee never answered
+  DECLINED // callee rejected
+  FAILED // connection failed
+}
+
+model Call {
+  id             String     @id @default(uuid())
+  conversationId String
+  initiatorId    String
+  type           CallType
+  status         CallStatus @default(INITIATED)
+
+  // WebRTC signaling data
+  offer  String? // SDP offer (JSON string)
+  answer String? // SDP answer (JSON string)
+
+  startedAt DateTime? // when call became ACTIVE
+  endedAt   DateTime? // when call ended
+  duration  Int? // in seconds, computed on end
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  initiator    User         @relation("CallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+
+  participants CallParticipant[]
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([initiatorId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model CallParticipant {
+  id     String @id @default(uuid())
+  callId String
+  userId String
+
+  // ICE candidates stored as JSON array string
+  iceCandidates String?
+
+  joinedAt DateTime?
+  leftAt   DateTime?
+  duration Int? // individual participant duration in seconds
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@index([callId])
+  @@index([userId])
+}

@@ -1,0 +1,41 @@
+# Caddyfile
+
+# childcareregister.com {
+#   reverse_proxy christmckinnon-frontend_app:3000
+# }
+
+api.raiztuapp.com {
+  reverse_proxy /socket.io* lauracg882_api:5000
+  @api {
+    not path /socket.io*
+  }
+  handle @api {
+    request_body {
+      max_size 500MB
+    }
+    reverse_proxy lauracg882_api:5000 {
+      header_up X-Real-IP {remote}
+      header_up X-Forwarded-For {remote}
+      header_up X-Forwarded-Proto {scheme}
+      header_up Host {host}
+    }
+  }
+}
+
+prisma.raiztuapp.com {
+  reverse_proxy lauracg882_prisma-studio:5555 {
+    header_up X-Real-IP {remote}
+    header_up X-Forwarded-For {remote}
+    header_up X-Forwarded-Proto {scheme}
+    header_up Host {host}
+  }
+}
+
+# ai.childcareregister.com {
+#   reverse_proxy christmckinnon-ai_ai:8000 {
+#     header_up X-Real-IP {remote}
+#     header_up X-Forwarded-For {remote}
+#     header_up X-Forwarded-Proto {scheme}
+#     header_up Host {host}
+#   }
+# }

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Integration Guide: Notifications WebSocket</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        pre, code {
+            background-color: #f4f4f4;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        pre {
+            padding: 16px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            margin-top: 1.5em;
+        }
+        hr {
+            border: 0;
+            border-top: 1px solid #ccc;
+            margin: 2em 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Frontend Integration Guide: Notifications WebSocket</h1>
+    <p>This document provides a simple, direct guide for app and frontend developers to integrate the Notifications WebSocket.</p>
+    
+    <p><strong>Namespace</strong>: <code>/notifications</code> (Connect via this path)<br>
+    <strong>Authentication</strong>: Valid JWT Bearer token required in the connection handshake.</p>
+
+    <hr>
+
+    <h2>1. Connection Example</h2>
+    <p>Pass the token via the <code>auth</code> object (common in Socket.IO).</p>
+
+<pre><code>import { io } from 'socket.io-client';
+
+const socket = io('http://your-api-url/notifications', {
+  auth: {
+    token: 'Bearer YOUR_JWT_TOKEN',
+  },
+});
+
+socket.on('connect', () => {
+  console.log('Connected to notifications!', socket.id);
+});
+
+socket.on('connected', (data) => {
+  console.log('Connection acknowledged:', data);
+  // { userId: '...', message: 'Connected to notifications' }
+});
+
+socket.on('connect_error', (err) => {
+  console.error('Connection failed:', err.message);
+});</code></pre>
+
+    <hr>
+
+    <h2>2. Events Overview</h2>
+    <p>Here is the quick reference for the events you can receive (Listen) on this namespace.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Client Emit Event</th>
+                <th>Server Response / Listener</th>
+                <th>Payload (Type)</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><em>(on connect)</em></td>
+                <td><code>connected</code></td>
+                <td><code>{ userId: UUID, message: string }</code></td>
+                <td>Server acknowledges successful connection and authentication.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>new_tag_request</code></td>
+                <td><code>{ message: string, postTagId: UUID, postId: UUID, actionUrl: string }</code></td>
+                <td>Triggered when someone tags you in a post and your settings require manual approval.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>new_collaboration_request</code></td>
+                <td><code>{ message: string, collaborationId: UUID, postId: UUID, actionUrl: string }</code></td>
+                <td>Triggered when someone invites you to collaborate on a post.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>collaboration.invite</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { collaborationId } }</code></td>
+                <td>Triggered when a brand invites you to a campaign collaboration.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>social.tagged</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { taggerId, postId } }</code></td>
+                <td>Triggered when you are tagged in a post.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>social.commented</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { commenterId, postId } }</code></td>
+                <td>Triggered when someone comments on your post.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>social.followed</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { followerId } }</code></td>
+                <td>Triggered when someone follows you.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>social.tag_accepted</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { postId, tagId } }</code></td>
+                <td>Triggered when a user accepts your post tag request.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>social.collab_accepted</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { postId, collabId } }</code></td>
+                <td>Triggered when a user accepts your collaboration request.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>proposal.reminder</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { proposalTitle, proposalId, startDate } }</code></td>
+                <td>Triggered as a reminder for an upcoming plan you are participating in.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>proposal.cancelled</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { proposalTitle, proposalId } }</code></td>
+                <td>Triggered when a plan you are participating in is cancelled.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>seed.spent</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { amount } }</code></td>
+                <td>Triggered when you spend seeds.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>seed.empty</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: {} }</code></td>
+                <td>Triggered when you run out of usable seeds.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>seed.earned</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { amount, senderId? } }</code></td>
+                <td>Triggered when you earn seeds.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>chat_message</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: { conversationId, senderId } }</code></td>
+                <td>Triggered when you receive a chat message.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>call_invite</code></td>
+                <td><em>(Data-only payload)</em></td>
+                <td>Triggered to wake up CallKit when someone calls you.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>call_cancelled</code></td>
+                <td><em>(Data-only payload)</em></td>
+                <td>Triggered to stop the ringtone if the caller hangs up before you answer.</td>
+            </tr>
+            <tr>
+                <td><em>(listen)</em></td>
+                <td><code>notification</code></td>
+                <td><code>{ type: string, title: string, message: string, meta: object }</code></td>
+                <td>General fallback for other systemic notifications (like payments, etc) if configured.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>3. Payload Details &amp; Explanations</h2>
+
+    <h3>Post Tag Requests</h3>
+
+    <p><strong>New Tag Request Received</strong><br>
+    <em>Listen</em>: <code>new_tag_request</code></p>
+    <p>Triggered when another user tags you in their post, and your <code>tagApprove</code> settings are set to <code>MANUALLY_APPROVE</code> (or you fall outside their auto-approve rules).</p>
+    
+<pre><code>{
+  "message": "You were tagged in a post by Alice.",
+  "postTagId": "uuid-of-the-post-tag",
+  "postId": "uuid-of-the-post",
+  "postCreatorId": "uuid-of-alice",
+  "postCreatorName": "Alice",
+  "postCreatorprofileUrl": "https://example.com/alice.jpg",
+  "actionUrl": "/post/tags/uuid-of-the-post-tag/status"
+}</code></pre>
+
+    <p><strong>How to handle this event:</strong></p>
+    <p>When you receive this event, you can show an in-app toast or banner. If the user clicks "Accept" or "Reject", make a standard <code>PATCH</code> request to the provided <code>actionUrl</code>:</p>
+
+<pre><code>// Example using fetch to accept the tag
+fetch('http://your-api-url' + data.actionUrl, {
+  method: 'PATCH',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_JWT_TOKEN'
+  },
+  body: JSON.stringify({ status: 'ACCEPTED' }) // or 'REJECTED'
+});</code></pre>
+
+    <h3>Post Collaboration Requests</h3>
+
+    <p><strong>New Collaboration Request Received</strong><br>
+    <em>Listen</em>: <code>new_collaboration_request</code></p>
+    <p>Triggered when another user invites you to collaborate on their post, and your <code>tagApprove</code> settings have <code>isCollaborationPost</code> set to <code>true</code>.</p>
+    
+<pre><code>{
+  "message": "You were invited to collaborate on a post by Alice.",
+  "collaborationId": "uuid-of-the-collaboration",
+  "postId": "uuid-of-the-post",
+  "postCreatorId": "uuid-of-alice",
+  "postCreatorName": "Alice",
+  "postCreatorprofileUrl": "https://example.com/alice.jpg",
+  "actionUrl": "/post/collaborations/uuid-of-the-collaboration/accept"
+}</code></pre>
+
+    <p><strong>How to handle this event:</strong></p>
+    <p>When you receive this event, you can show an in-app toast or banner. If the user clicks "Accept" or "Reject", make a standard <code>PATCH</code> request to the provided <code>actionUrl</code> with a <code>status</code> query parameter (<code>ACCEPTED</code> or `REJECTED`):</p>
+
+<pre><code>// Example using fetch to accept/reject the collaboration request
+const status = 'ACCEPTED'; // or 'REJECTED'
+fetch('http://your-api-url' + data.actionUrl + `?status=${status}`, {
+  method: 'PATCH',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_JWT_TOKEN'
+  }
+});</code></pre>
+
+    <h3>General Push Notifications</h3>
+    
+    <p>These events follow a standard <code>{ type, title, message, meta }</code> structure and can be used to show local push notifications or in-app alerts.</p>
+    
+    <p><strong>Social Notifications</strong><br>
+    <em>Listen</em>: <code>social.tagged</code> / <code>social.commented</code> / <code>social.followed</code> / <code>social.tag_accepted</code> / <code>social.collab_accepted</code></p>
+    
+<pre><code>{
+  "type": "social.commented",
+  "title": "New comment on your post",
+  "message": "This is a great post! ...",
+  "meta": { "commenterId": "uuid", "postId": "uuid" },
+  "senderId": "uuid-of-commenter"
+}
+</code></pre>
+
+<pre><code>{
+  "type": "social.followed",
+  "title": "New Follower",
+  "message": "Alice started following you!",
+  "meta": { "followerId": "uuid" },
+  "senderId": "uuid-of-follower"
+}
+</code></pre>
+
+<pre><code>{
+  "type": "social.tag_accepted",
+  "title": "Tag Accepted",
+  "message": "Alice accepted your tag request.",
+  "meta": { "postId": "uuid", "tagId": "uuid" },
+  "senderId": "uuid-of-alice"
+}
+</code></pre>
+
+<pre><code>{
+  "type": "social.collab_accepted",
+  "title": "Collaboration Accepted",
+  "message": "Alice accepted your collaboration request.",
+  "meta": { "postId": "uuid", "collabId": "uuid" },
+  "senderId": "uuid-of-alice"
+}
+</code></pre>
+
+    <p><strong>Campaign Collaboration Notifications</strong><br>
+    <em>Listen</em>: <code>collaboration.invite</code></p>
+    
+<pre><code>{
+  "type": "collaboration.invite",
+  "title": "New Collaboration Invite",
+  "message": "You have been invited to collaborate on Product Launch Campaign",
+  "meta": { "collaborationId": "uuid" },
+  "senderId": "uuid-of-brand"
+}</code></pre>
+
+    <p><strong>Plan / Activity Notifications</strong><br>
+    <em>Listen</em>: <code>proposal.reminder</code> / <code>proposal.cancelled</code></p>
+    
+<pre><code>{
+  "type": "proposal.reminder",
+  "title": "Upcoming Proposal Reminder",
+  "message": "The proposal \"Beach Cleanup\" is starting soon...",
+  "meta": { "proposalTitle": "Beach Cleanup", "proposalId": "uuid", "startDate": "2026-07-05T10:00:00.000Z" }
+}</code></pre>
+
+    <p><strong>Seed Balance Notifications</strong><br>
+    <em>Listen</em>: <code>seed.spent</code> / <code>seed.empty</code> / <code>seed.earned</code></p>
+    
+<pre><code>{
+  "type": "seed.earned",
+  "title": "Seeds Earned",
+  "message": "You have earned 50 seeds.",
+  "meta": { "amount": 50, "senderId": "uuid" },
+  "senderId": "uuid"
+}</code></pre>
+
+    <p><strong>Chat Message Notifications</strong><br>
+    <em>Listen</em>: <code>chat_message</code></p>
+    
+<pre><code>{
+  "type": "chat_message",
+  "title": "Rakib Hasan",
+  "message": "Sent a message",
+  "meta": { "conversationId": "chat_room_123", "senderId": "uuid" },
+  "senderId": "uuid"
+}</code></pre>
+
+    <h3>WebRTC Call Notifications (Data-Only)</h3>
+    <p>These are special <strong>Data-Only</strong> FCM messages sent without a <code>notification</code> block. They are intended to wake up CallKit (iOS) or ConnectionService (Android) while the app is in the background/terminated.</p>
+
+    <p><strong>Call Invite Received</strong><br>
+    <em>Listen</em>: <code>call_invite</code></p>
+    
+<pre><code>{
+  "message": {
+    "token": "USER_DEVICE_TOKEN",
+    "android": {
+      "priority": "high"
+    },
+    "apns": {
+      "headers": {
+        "apns-priority": "10"
+      },
+      "payload": {
+        "aps": {
+          "content-available": 1
+        }
+      }
+    },
+    "data": {
+      "type": "call_invite",
+      "callId": "65ab321c...",
+      "callerName": "Rakib Hasan",
+      "hasVideo": "true",
+      "initiatorId": "65ab123c...",
+      "conversationId": "chat_room_123"
+    }
+  }
+}</code></pre>
+
+    <p><strong>Call Cancelled / Hung Up</strong><br>
+    <em>Listen</em>: <code>call_cancelled</code></p>
+    
+<pre><code>{
+  "message": {
+    "token": "USER_DEVICE_TOKEN",
+    "data": {
+      "type": "call_cancelled",
+      "callId": "65ab321c..."
+    }
+  }
+}</code></pre>
+
+</body>
+</html>

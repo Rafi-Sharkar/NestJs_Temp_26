@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Integration Guide: WebRTC RTC Call</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        pre, code {
+            background-color: #f4f4f4;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        pre {
+            padding: 16px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            margin-top: 1.5em;
+        }
+        hr {
+            border: 0;
+            border-top: 1px solid #ccc;
+            margin: 2em 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Frontend Integration Guide: WebRTC RTC Call</h1>
+    <p>This document provides a simple, direct guide for app and frontend developers to integrate the WebRTC voice and video calling features.</p>
+    
+    <p><strong>Namespace</strong>: <code>/rtc-call</code> (Connect via this path)<br>
+    <strong>Authentication</strong>: Valid JWT Bearer token required in the connection handshake.</p>
+
+    <hr>
+
+    <h2>1. Connection Example</h2>
+    <p>Pass the token via the <code>auth</code> object (common in Socket.IO).</p>
+
+<pre><code>import { io } from 'socket.io-client';
+
+const rtcSocket = io('http://your-api-url/rtc-call', {
+  auth: {
+    token: 'Bearer YOUR_JWT_TOKEN',
+  },
+});
+
+rtcSocket.on('connect', () => {
+  console.log('Connected to RTC Gateway!', rtcSocket.id);
+});
+
+rtcSocket.on('connect_error', (err) => {
+  console.error('RTC Connection failed:', err.message);
+});</code></pre>
+
+    <hr>
+
+    <h2>2. HTTP REST Endpoints</h2>
+    <p>Use these REST API endpoints for loading historical call logs. All endpoints require the <code>Authorization: Bearer YOUR_JWT_TOKEN</code> header.</p>
+
+    <h3>Get Call History (All User Calls)</h3>
+    <p><strong>Path</strong>: <code>GET /rtc-call/history</code></p>
+<pre><code>[
+  {
+    "id": "call-uuid",
+    "conversationId": "conversation-uuid",
+    "initiatorId": "user-uuid",
+    "type": "VIDEO", // VOICE or VIDEO
+    "status": "ENDED", // INITIATED, RINGING, ACTIVE, ENDED, MISSED, DECLINED, FAILED
+    "startedAt": "2026-06-03T10:00:00.000Z",
+    "endedAt": "2026-06-03T10:15:30.000Z",
+    "duration": 930,
+    "createdAt": "2026-06-03T09:59:45.000Z",
+    "initiator": {
+      "id": "user-uuid",
+      "name": "Alice",
+      "fullName": "Alice Smith",
+      "profilePhoto": "https://example.com/alice.jpg"
+    },
+    "participants": [
+      {
+        "id": "participant-record-uuid",
+        "userId": "bob-uuid",
+        "joinedAt": "2026-06-03T10:00:02.000Z",
+        "leftAt": "2026-06-03T10:15:30.000Z",
+        "duration": 928,
+        "user": {
+          "id": "bob-uuid",
+          "name": "Bob",
+          "fullName": "Bob Jones",
+          "profilePhoto": null
+        }
+      }
+    ]
+  }
+]</code></pre>
+
+    <h3>Get Call History by Conversation</h3>
+    <p><strong>Path</strong>: <code>GET /rtc-call/conversation/:conversationId</code></p>
+
+    <h3>Get Call Details by ID</h3>
+    <p><strong>Path</strong>: <code>GET /rtc-call/:id</code></p>
+
+    <hr>
+
+    <h2>3. WebSocket Events Overview</h2>
+    <p>Here is the quick reference for all events you can send (Emit) and receive (Listen).</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Client Emit Event</th>
+                <th>Server Response / Listener</th>
+                <th>Input Payload (Type)</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>call:initiate</code></td>
+                <td><code>call:incoming</code> (to callee)<br><code>call:outgoing</code> (to sender)</td>
+                <td><code>{ conversationId: UUID, type: "VOICE" | "VIDEO", offer?: string }</code></td>
+                <td>Initiates a call. Emits the SDP offer to the callee.</td>
+            </tr>
+            <tr>
+                <td><code>call:ringing</code></td>
+                <td><code>call:ringing</code> (to caller)</td>
+                <td><code>{ callId: UUID }</code></td>
+                <td>Callee client notifies the server they are ringing. Relays event to caller.</td>
+            </tr>
+            <tr>
+                <td><code>call:accept</code></td>
+                <td><code>call:accepted</code> (to caller)</td>
+                <td><code>{ callId: UUID, answer: string }</code></td>
+                <td>Callee accepts call, returning their SDP answer. Sets call status to ACTIVE.</td>
+            </tr>
+            <tr>
+                <td><code>call:decline</code></td>
+                <td><code>call:declined</code> (to caller)</td>
+                <td><code>{ callId: UUID }</code></td>
+                <td>Callee rejects/declines the incoming call request. Sets call status to DECLINED.</td>
+            </tr>
+            <tr>
+                <td><code>call:end</code></td>
+                <td><code>call:ended</code> (to all)</td>
+                <td><code>{ callId: UUID }</code></td>
+                <td>Ends the active call session. Calculates total duration.</td>
+            </tr>
+            <tr>
+                <td><code>webrtc:offer</code></td>
+                <td><code>webrtc:offer</code> (to target)</td>
+                <td><code>{ callId: UUID, offer: string, targetUserId: UUID }</code></td>
+                <td>Relays peer-to-peer WebRTC SDP offer directly.</td>
+            </tr>
+            <tr>
+                <td><code>webrtc:answer</code></td>
+                <td><code>webrtc:answer</code> (to target)</td>
+                <td><code>{ callId: UUID, answer: string, targetUserId: UUID }</code></td>
+                <td>Relays peer-to-peer WebRTC SDP answer directly.</td>
+            </tr>
+            <tr>
+                <td><code>webrtc:ice-candidate</code></td>
+                <td><code>webrtc:ice-candidate</code> (to target)</td>
+                <td><code>{ callId: UUID, candidate: string, targetUserId: UUID }</code></td>
+                <td>Relays and persists WebRTC ICE connection candidate.</td>
+            </tr>
+            <tr>
+                <td><code>call:toggle-audio</code></td>
+                <td><code>call:participant-audio-toggled</code> (to others)</td>
+                <td><code>{ callId: UUID, enabled: boolean }</code></td>
+                <td>Notifies others if you muted/unmuted your microphone.</td>
+            </tr>
+            <tr>
+                <td><code>call:toggle-video</code></td>
+                <td><code>call:participant-video-toggled</code> (to others)</td>
+                <td><code>{ callId: UUID, enabled: boolean }</code></td>
+                <td>Notifies others if you turned your video on/off.</td>
+            </tr>
+            <tr>
+                <td><code>call:toggle-screenshare</code></td>
+                <td><code>call:participant-screenshare-toggled</code> (to others)</td>
+                <td><code>{ callId: UUID, enabled: boolean }</code></td>
+                <td>Notifies others if you toggled screensharing.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>4. Payload Details &amp; Explanations</h2>
+
+    <h3>Call Initiation &amp; Reception</h3>
+    <p><strong>Initiate a Call</strong><br>
+    <em>Emit</em>: <code>call:initiate</code></p>
+<pre><code>{
+  "conversationId": "conversation-uuid",
+  "type": "VIDEO", // VOICE or VIDEO
+  "offer": "SDP offer string..."
+}</code></pre>
+
+    <p><strong>Incoming Call Alert</strong><br>
+    <em>Listen</em>: <code>call:incoming</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "conversationId": "conversation-uuid",
+  "initiatorId": "user-uuid",
+  "type": "VIDEO",
+  "offer": "SDP offer string...",
+  "initiator": {
+    "id": "user-uuid",
+    "name": "Alice",
+    "fullName": "Alice Smith",
+    "profilePhoto": "https://example.com/alice.jpg"
+  }
+}</code></pre>
+
+    <p><strong>Outgoing Call Confirmation (to Caller)</strong><br>
+    <em>Listen</em>: <code>call:outgoing</code></p>
+<pre><code>{
+  "success": true,
+  "call": {
+    "id": "call-uuid",
+    "conversationId": "conversation-uuid",
+    "initiatorId": "user-uuid",
+    "type": "VIDEO",
+    "status": "INITIATED",
+    "offer": "SDP offer string...",
+    "createdAt": "2026-06-03T09:59:45.000Z"
+  },
+  "ringingTo": ["callee-user-uuid"]
+}</code></pre>
+
+    <hr>
+
+    <h3>Ringing Feedback</h3>
+    <p><strong>Callee Device Ringing</strong><br>
+    <em>Emit</em>: <code>call:ringing</code></p>
+<pre><code>{
+  "callId": "call-uuid"
+}</code></pre>
+
+    <p><strong>Ringing Notification (to Caller)</strong><br>
+    <em>Listen</em>: <code>call:ringing</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "calleeId": "callee-user-uuid"
+}</code></pre>
+
+    <hr>
+
+    <h3>Accepting &amp; Connecting</h3>
+    <p><strong>Accept Incoming Call</strong><br>
+    <em>Emit</em>: <code>call:accept</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "answer": "SDP answer string..."
+}</code></pre>
+
+    <p><strong>Call Accepted Notification (to Caller)</strong><br>
+    <em>Listen</em>: <code>call:accepted</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "answer": "SDP answer string...",
+  "calleeId": "callee-user-uuid"
+}</code></pre>
+
+    <hr>
+
+    <h3>Declining &amp; Ending</h3>
+    <p><strong>Decline/Reject Call</strong><br>
+    <em>Emit</em>: <code>call:decline</code></p>
+<pre><code>{
+  "callId": "call-uuid"
+}</code></pre>
+
+    <p><strong>Call Declined Notification (to Caller)</strong><br>
+    <em>Listen</em>: <code>call:declined</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "calleeId": "callee-user-uuid"
+}</code></pre>
+
+    <p><strong>End Active Call</strong><br>
+    <em>Emit</em>: <code>call:end</code></p>
+<pre><code>{
+  "callId": "call-uuid"
+}</code></pre>
+
+    <p><strong>Call Ended Notification</strong><br>
+    <em>Listen</em>: <code>call:ended</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "endedBy": "user-uuid",
+  "duration": 930 // call duration in seconds
+}</code></pre>
+
+    <hr>
+
+    <h3>WebRTC Signaling Relay</h3>
+    <p><strong>Relay WebRTC Offer/Answer/ICE Candidates</strong><br>
+    <em>Emit</em>: <code>webrtc:offer</code>, <code>webrtc:answer</code>, or <code>webrtc:ice-candidate</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "offer": "SDP content...", // or "answer" or "candidate"
+  "targetUserId": "recipient-user-uuid"
+}</code></pre>
+
+    <p><strong>Receive Relayed WebRTC Offer/Answer/ICE Candidates</strong><br>
+    <em>Listen</em>: <code>webrtc:offer</code>, <code>webrtc:answer</code>, or <code>webrtc:ice-candidate</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "offer": "SDP content...", // or "answer" or "candidate"
+  "senderId": "sender-user-uuid"
+}</code></pre>
+
+    <hr>
+
+    <h3>In-Call Controls</h3>
+    <p><strong>Toggle Call Actions (Audio/Video/Screenshare)</strong><br>
+    <em>Emit</em>: <code>call:toggle-audio</code>, <code>call:toggle-video</code>, or <code>call:toggle-screenshare</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "enabled": false
+}</code></pre>
+
+    <p><strong>Participant Action Toggled</strong><br>
+    <em>Listen</em>: <code>call:participant-audio-toggled</code>, <code>call:participant-video-toggled</code>, or <code>call:participant-screenshare-toggled</code></p>
+<pre><code>{
+  "callId": "call-uuid",
+  "userId": "user-uuid-who-toggled",
+  "enabled": false
+}</code></pre>
+
+    <hr>
+
+    <h2>5. Example WebRTC Calling Flow</h2>
+    <p>Below is the standard flow of operations and WebRTC signaling exchange between the Caller (Alice), the NestJS Server, and the Callee (Bob):</p>
+    
+    <h3>5.1 Sequence Diagram</h3>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Caller as Alice (Caller)
+    participant Server as NestJS Server (/rtc-call)
+    actor Callee as Bob (Callee)
+
+    Note over Caller, Callee: Phase 1: Call Initiation & Setup
+    Caller->>Server: Emit "call:initiate" { conversationId, type, offer }
+    activate Server
+    Server-->>Caller: Emit "call:outgoing" (Returns { success: true, call, ringingTo })
+    Server->>Callee: Emit "call:incoming" { callId, conversationId, initiatorId, type, offer, initiator }
+    deactivate Server
+    
+    Callee->>Server: Emit "call:ringing" { callId }
+    Server->>Caller: Emit "call:ringing" { callId, calleeId }
+
+    Note over Caller, Callee: Phase 2: Call Acceptance / Decline
+    alt Option A: Bob Accepts
+        Callee->>Server: Emit "call:accept" { callId, answer }
+        Server->>Caller: Emit "call:accepted" { callId, answer, calleeId }
+        
+        Note over Caller, Callee: Phase 3: ICE Candidate Exchange (Bidirectional)
+        Caller->>Server: Emit "webrtc:ice-candidate" { callId, candidate, targetUserId }
+        Server->>Callee: Emit "webrtc:ice-candidate" { callId, candidate, senderId }
+        Callee->>Server: Emit "webrtc:ice-candidate" { callId, candidate, targetUserId }
+        Server->>Caller: Emit "webrtc:ice-candidate" { callId, candidate, senderId }
+        
+        Note over Caller, Callee: Phase 4: In-Call Controls (e.g., Mute)
+        Callee->>Server: Emit "call:toggle-audio" { callId, enabled: false }
+        Server->>Caller: Emit "call:participant-audio-toggled" { callId, userId, enabled: false }
+        
+        Note over Caller, Callee: Phase 5: Termination
+        Caller->>Server: Emit "call:end" { callId }
+        Server->>Caller: Emit "call:ended" { callId, endedBy, duration }
+        Server->>Callee: Emit "call:ended" { callId, endedBy, duration }
+    else Option B: Bob Declines
+        Callee->>Server: Emit "call:decline" { callId }
+        Server->>Caller: Emit "call:declined" { callId, calleeId }
+    end
+    </div>
+
+    <h3>5.2 Flow Details</h3>
+    <h4>Phase 1: Call Setup (SDP Exchange)</h4>
+    <ol>
+        <li><strong>Alice</strong> (caller) emits <code>call:initiate</code> with target <code>conversationId</code>, <code>type: 'VIDEO'</code>, and her local WebRTC SDP <code>offer</code>.</li>
+        <li><strong>Server</strong> creates the database call record, joins Alice as a participant, emits <code>call:outgoing</code> back to Alice to acknowledge, and emits <code>call:incoming</code> to <strong>Bob</strong> (callee) with Alice's <code>offer</code> and profile info.</li>
+        <li><strong>Bob's</strong> client receives <code>call:incoming</code>, plays the ringtone, and emits <code>call:ringing</code> back to the server.</li>
+        <li><strong>Server</strong> relays <code>call:ringing</code> to <strong>Alice</strong> so her screen displays "Ringing...".</li>
+    </ol>
+
+    <h4>Phase 2: Connection Establishment</h4>
+    <ol>
+        <li><strong>Bob</strong> (callee) clicks "Accept". His client creates a WebRTC answer and emits <code>call:accept</code> with his SDP <code>answer</code>.</li>
+        <li><strong>Server</strong> updates the call status to <code>ACTIVE</code>, joins Bob as a participant, and relays <code>call:accepted</code> to <strong>Alice</strong> with Bob's SDP <code>answer</code>.</li>
+        <li><strong>Alice</strong> and <strong>Bob</strong> establish direct WebRTC connection.</li>
+    </ol>
+
+    <h4>Phase 3: ICE Candidate Exchange</h4>
+    <ol>
+        <li>Both clients gather ICE candidates and emit <code>webrtc:ice-candidate</code> with the candidate details and the target's <code>userId</code>.</li>
+        <li><strong>Server</strong> saves these candidates to the database for call auditing and relays them immediately via <code>webrtc:ice-candidate</code> to the target.</li>
+    </ol>
+
+    <h4>Phase 4: Active Controls &amp; Call Termination</h4>
+    <ol>
+        <li>If Bob mutes himself, his client emits <code>call:toggle-audio</code> with <code>enabled: false</code>. Alice receives <code>call:participant-audio-toggled</code> to update Bob's mute icon.</li>
+        <li>When Alice clicks "Hang up", her client emits <code>call:end</code>.</li>
+        <li><strong>Server</strong> updates the call status to <code>ENDED</code>, calculates participant durations, and emits <code>call:ended</code> to all users in the conversation.</li>
+    </ol>
+
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

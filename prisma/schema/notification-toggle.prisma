@@ -1,0 +1,25 @@
+model NotificationToggle {
+  id               String  @id @default(uuid())
+  // Notification types
+  email            Boolean @default(false)
+  pushNotification Boolean @default(true)
+  // Normal User Notification categories
+  payment          Boolean @default(true)
+  message          Boolean @default(true)
+  planStarted      Boolean @default(true)
+  pendingChallenge Boolean @default(true)
+  expireReward     Boolean @default(true)
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification-toggle")
+}
+
+enum NotificationTypeEnum {
+  payment
+  message
+  planStarted
+  pendingChallenge
+  expireReward
+}

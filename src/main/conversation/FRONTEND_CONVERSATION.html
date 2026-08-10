@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Integration Guide: Conversation WebSocket</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        pre, code {
+            background-color: #f4f4f4;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        pre {
+            padding: 16px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            margin-top: 1.5em;
+        }
+        hr {
+            border: 0;
+            border-top: 1px solid #ccc;
+            margin: 2em 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Frontend Integration Guide: Conversation WebSocket</h1>
+    <p>This document provides a simple, direct guide for app and frontend developers to integrate the Conversation Messaging WebSocket.</p>
+    
+    <p><strong>Namespace</strong>: <code>/conversation</code> (Connect via this path)<br>
+    <strong>Authentication</strong>: Valid JWT Bearer token required in the connection handshake.</p>
+
+    <hr>
+
+    <h2>1. Connection Example</h2>
+    <p>Pass the token via the <code>auth</code> object (common in Socket.IO).</p>
+
+<pre><code>import { io } from 'socket.io-client';
+
+const socket = io('http://your-api-url/conversation', {
+  auth: {
+    token: 'Bearer YOUR_JWT_TOKEN',
+  },
+});
+
+socket.on('connect', () => {
+  console.log('Connected to conversation!', socket.id);
+});
+
+socket.on('conversation:user_info', (data) => {
+  console.log('User info received on connect:', data.user);
+});
+
+socket.on('connect_error', (err) => {
+  console.error('Connection failed:', err.message);
+});</code></pre>
+
+    <hr>
+
+    <h2>2. Events Overview</h2>
+    <p>Here is the quick reference for all events you can send (Emit) and receive (Listen).</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Client Emit Event</th>
+                <th>Server Response / Listener</th>
+                <th>Input Payload (Type)</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><em>(on connect)</em></td>
+                <td><code>conversation:user_info</code></td>
+                <td><em>None</em></td>
+                <td>Server sends the user's full information upon connection.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:load_conversations</code></td>
+                <td><code>conversation:conversation_list</code></td>
+                <td><code>{ status?: string | string[] }</code> (Optional)</td>
+                <td>Load all conversations (individual/groups). Can filter by status.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:load_single_conversation</code></td>
+                <td><code>conversation:load_single_conversation</code></td>
+                <td><code>{ conversationId: UUID }</code></td>
+                <td>Load details for a single specific conversation.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:conversation_messages</code></td>
+                <td><code>conversation:conversation_messages</code></td>
+                <td><code>{ conversationId: UUID, page?: number, limit?: number }</code></td>
+                <td>Load paginated messages for a conversation.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:message_send</code></td>
+                <td><code>conversation:message_sent</code> (to sender)<br><code>conversation:message_receive</code> (to rcvr)</td>
+                <td><code>{ conversationId: UUID, content?: string, mediaUrl?: URL, mediaType?: Enum, replyToId?: UUID, forwardedFromId?: UUID }</code></td>
+                <td>Send a new message, reply, or forward a message.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:message_react</code></td>
+                <td><code>conversation:message_reacted</code> (to participants)</td>
+                <td><code>{ messageId: UUID, emoji: string }</code></td>
+                <td>React to a message or remove a reaction.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:message_unsend</code></td>
+                <td><code>conversation:message_unsent</code> (to participants)</td>
+                <td><code>{ messageId: UUID }</code></td>
+                <td>Unsend (delete for everyone) a message.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:message_delete_for_me</code></td>
+                <td><code>conversation:message_deleted_for_me</code> (to sender)</td>
+                <td><code>{ messageId: UUID }</code></td>
+                <td>Delete a message only for the user who requested it.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:message_read</code></td>
+                <td><code>conversation:message_read</code> (to sender of the message)</td>
+                <td><code>{ messageId: UUID }</code></td>
+                <td>Acknowledge that a message was read.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:typing_start</code></td>
+                <td><code>conversation:typing_start</code> (to other participants)</td>
+                <td><code>{ conversationId: UUID }</code></td>
+                <td>Notify others that you started typing.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:typing_stop</code></td>
+                <td><code>conversation:typing_stop</code> (to other participants)</td>
+                <td><code>{ conversationId: UUID }</code></td>
+                <td>Notify others that you stopped typing.</td>
+            </tr>
+            <tr>
+                <td><em>(AI Chat Triggered)</em></td>
+                <td><code>ai:chunk</code> (to you)</td>
+                <td><em>None</em> (Triggered by sending message to AI)</td>
+                <td>Receive a text chunk of the AI's streaming response.</td>
+            </tr>
+            <tr>
+                <td><em>(AI Chat Finished)</em></td>
+                <td><code>ai:done</code> (to you)</td>
+                <td><em>None</em> (Triggered by AI finishing)</td>
+                <td>Notify that AI streaming is complete.</td>
+            </tr>
+            <tr>
+                <td><em>(AI Chat Failed)</em></td>
+                <td><code>ai:error</code> (to you)</td>
+                <td><em>None</em> (Triggered if AI fails)</td>
+                <td>Notify that the AI encountered an error.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:get_user_status</code></td>
+                <td><code>conversation:user_status</code> (to you)</td>
+                <td><code>{ userId: UUID }</code></td>
+                <td>Request the online/offline status of a user.</td>
+            </tr>
+            <tr>
+                <td><code>conversation:set_user_status</code></td>
+                <td><code>conversation:user_status_changed</code> (broadcast)</td>
+                <td><code>{ isOnline: boolean }</code></td>
+                <td>Manually set your active status bounds.</td>
+            </tr>
+            <tr>
+                <td><em>(on connect / disconnect)</em></td>
+                <td><code>conversation:user_status_changed</code></td>
+                <td><em>None</em></td>
+                <td>Automatically broadcasted to users when you connect/disconnect.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>3. Payload Details &amp; Explanations</h2>
+
+    <h3>Loading Conversations &amp; Messages</h3>
+
+    <p><strong>Load All Conversations</strong><br>
+    <em>Emit</em>: <code>conversation:load_conversations</code></p>
+<pre><code>{
+  "status": ["ACTIVE"] // Optional filter, e.g., 'ACTIVE', 'REQUESTED'
+}</code></pre>
+
+    <p><strong>Conversation List Response</strong><br>
+    <em>Listen</em>: <code>conversation:conversation_list</code></p>
+<pre><code>{
+  "success": true,
+  "message": "Conversations loaded successfully",
+  "conversations": [
+    {
+      "id": "conversation-uuid",
+      "type": "INDIVIDUAL", // or "GROUP"
+      "status": "ACTIVE",
+      "user1Id": "user1-uuid",
+      "user2Id": "user2-uuid",
+      "lastMessageId": "message-uuid",
+      "lastMessage": {
+        "content": "Hello!"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "id": "conversation-uuid",
+      "type": "INDIVIDUAL",
+      "status": "REQUESTED"
+    }
+  ]
+}</code></pre>
+
+    <p><strong>Load Single Conversation Details</strong><br>
+    <em>Emit</em>: <code>conversation:load_single_conversation</code></p>
+<pre><code>{
+  "conversationId": "conversation-uuid"
+}</code></pre>
+
+    <p><strong>Single Conversation Response</strong><br>
+    <em>Listen</em>: <code>conversation:load_single_conversation</code></p>
+<pre><code>{
+  "success": true,
+  "data": {
+    "id": "conversation-uuid",
+    "type": "INDIVIDUAL",
+    "user1": { "id": "user1-uuid", "name": "Alice" },
+    "user2": { "id": "user2-uuid", "name": "Bob" },
+    "lastMessage": { "content": "Hi!" }
+  }
+}</code></pre>
+
+    <p><strong>Load Conversation Messages</strong><br>
+    <em>Emit</em>: <code>conversation:conversation_messages</code></p>
+<pre><code>{
+  "conversationId": "conversation-uuid",
+  "page": 1,
+  "limit": 20
+}</code></pre>
+
+    <p><strong>Messages Response</strong><br>
+    <em>Listen</em>: <code>conversation:conversation_messages</code></p>
+<pre><code>{
+  "success": true,
+  "data": [
+    {
+      "id": "message-uuid",
+      "content": "Hello!",
+      "createdAt": "2026-05-06T10:00:00.000Z",
+      "sender": { "id": "sender-uuid", "name": "Sender Name" }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 50,
+    "totalPages": 3
+  }
+}</code></pre>
+
+    <hr>
+
+    <h3>Sending &amp; Receiving Messages</h3>
+
+    <p><strong>Send a Message</strong><br>
+    <em>Emit</em>: <code>conversation:message_send</code></p>
+<pre><code>{
+  "conversationId": "conversation-uuid",
+  "content": "Hello! How are you?",
+  "mediaUrl": "https://example.com/image.jpg",
+  "mediaType": "IMAGE",
+  "replyToId": "optional-uuid-of-message-replying-to",
+  "forwardedFromId": "optional-uuid-of-message-forwarding-from"
+}</code></pre>
+    <p><em>(Note: Either <code>content</code> or <code>mediaUrl/mediaType</code> must be provided).</em></p>
+
+    <p><strong>Message Sent / Received</strong><br>
+    <em>Listen</em>: <code>conversation:message_sent</code> (sender) / <code>conversation:message_receive</code> (receiver)<br>
+    Both events share the same payload format.</p>
+<pre><code>{
+  "success": true,
+  "message": "Message sent successfully",
+  "data": {
+    "id": "message-uuid",
+    "conversationId": "conversation-uuid",
+    "content": "Hello! How are you?",
+    "mediaUrl": null,
+    "mediaType": null,
+    "senderId": "sender-uuid",
+    "sender": { "id": "sender-uuid", "name": "Sender Name" },
+    "createdAt": "2026-05-06T10:00:00.000Z"
+  }
+}</code></pre>
+
+    <hr>
+
+    <h3>Advanced Message Actions</h3>
+
+    <p>These events are triggered by the server in response to REST API calls (like POST <code>/message/:id/react</code>) to keep all clients synced in real-time.</p>
+
+    <p><strong>Message Reacted</strong><br>
+    <em>Listen</em>: <code>conversation:message_reacted</code><br>
+    Indicates a user added or removed a reaction.</p>
+<pre><code>{
+  "messageId": "message-uuid",
+  "conversationId": "conversation-uuid",
+  "emoji": "👍",
+  "action": "added", // or "removed"
+  "userId": "user-uuid-who-reacted"
+}</code></pre>
+
+    <p><strong>Message Unsent</strong><br>
+    <em>Listen</em>: <code>conversation:message_unsent</code><br>
+    Indicates a user unsent their message. The client should remove or hide the content.</p>
+<pre><code>{
+  "messageId": "message-uuid",
+  "conversationId": "conversation-uuid"
+}</code></pre>
+
+    <p><strong>Message Deleted For Me</strong><br>
+    <em>Listen</em>: <code>conversation:message_deleted_for_me</code> (only to you)<br>
+    Indicates you deleted a message for yourself.</p>
+<pre><code>{
+  "messageId": "message-uuid",
+  "conversationId": "conversation-uuid",
+  "userId": "your-user-uuid"
+}</code></pre>
+
+    <hr>
+
+    <h3>Read Receipts</h3>
+
+    <p><strong>Mark a Message as Read</strong><br>
+    <em>Emit</em>: <code>conversation:message_read</code></p>
+<pre><code>{
+  "messageId": "message-uuid-you-read"
+}</code></pre>
+
+    <p><strong>Read Receipt Notification</strong><br>
+    <em>Listen</em>: <code>conversation:message_read</code><br>
+    Indicates the other user read your message.</p>
+<pre><code>{
+  "messageId": "message-uuid-they-read",
+  "conversationId": "conversation-uuid",
+  "readBy": "reader-user-uuid"
+}</code></pre>
+
+    <hr>
+
+    <h3>Typing Indicators</h3>
+
+    <p><strong>Start / Stop Typing</strong><br>
+    <em>Emit</em>: <code>conversation:typing_start</code> OR <code>conversation:typing_stop</code></p>
+<pre><code>{
+  "conversationId": "conversation-uuid"
+}</code></pre>
+
+    <p><strong>User is Typing / Stopped Typing</strong><br>
+    <em>Listen</em>: <code>conversation:typing_start</code> OR <code>conversation:typing_stop</code></p>
+<pre><code>{
+  "conversationId": "conversation-uuid",
+  "userId": "typist-user-uuid"
+}</code></pre>
+
+    <hr>
+
+    <h3>User Status &amp; Presence</h3>
+
+    <p><strong>Get User Status</strong><br>
+    <em>Emit</em>: <code>conversation:get_user_status</code></p>
+<pre><code>{
+  "userId": "user-uuid"
+}</code></pre>
+
+    <p><strong>Status Response</strong><br>
+    <em>Listen</em>: <code>conversation:user_status</code></p>
+<pre><code>{
+  "id": "user-uuid",
+  "isOnline": true,
+  "lastActiveAt": "2026-05-06T09:30:00.000Z"
+}</code></pre>
+
+    <p><strong>Set User Status</strong><br>
+    <em>Emit</em>: <code>conversation:set_user_status</code></p>
+<pre><code>{
+  "isOnline": true
+}</code></pre>
+
+    <p><strong>Global Status Changes</strong><br>
+    <em>Listen</em>: <code>conversation:user_status_changed</code><br>
+    Automatically triggered whenever any user connects, disconnects, or manually sets their status.</p>
+<pre><code>{
+  "userId": "user-uuid",
+  "isOnline": true,
+  "lastActiveAt": "2026-05-06T10:00:00.000Z"
+}</code></pre>
+
+    <hr>
+
+    <h2>4. AI Chat &amp; Streaming</h2>
+
+    <p><strong>Initialize AI Conversation</strong><br>
+    Use this REST API endpoint to create or retrieve your conversation with the AI Assistant. This conversation will automatically appear in your <code>conversation_list</code> via sockets.<br>
+    <em>HTTP POST</em>: <code>/conversation/ai/init</code> (Requires Bearer Token)<br>
+    <em>Response</em>: Returns <code>{ success: true, conversation: { ... } }</code></p>
+
+    <p><strong>Triggering AI Responses</strong><br>
+    You do not need a special event to talk to the AI. Simply send a message using the standard <code>conversation:message_send</code> event, targeting the AI conversation ID. The server will detect it's an AI chat and begin streaming.</p>
+
+    <p><strong>AI Stream Chunk</strong><br>
+    <em>Listen</em>: <code>ai:chunk</code><br>
+    Provides real-time token-by-token streaming as the AI generates its reply.</p>
+<pre><code>{
+  "conversationId": "conversation-uuid",
+  "chunk": "Hello! I am an "
+}</code></pre>
+
+    <p><strong>AI Stream Complete</strong><br>
+    <em>Listen</em>: <code>ai:done</code><br>
+    Indicates the AI has finished its response. Once finished, a standard <code>conversation:message_receive</code> event is also fired containing the full saved message.</p>
+<pre><code>{
+  "conversationId": "conversation-uuid"
+}</code></pre>
+
+    <p><strong>AI Error</strong><br>
+    <em>Listen</em>: <code>ai:error</code></p>
+<pre><code>{
+  "message": "Failed to generate AI response"
+}</code></pre>
+
+    <hr>
+
+    <h2>5. REST API Endpoints (Groups &amp; Advanced Messaging)</h2>
+
+    <p>In addition to WebSockets, several features are managed via standard HTTP REST endpoints. All endpoints require a valid JWT Bearer token. Base path: <code>/conversation</code>.</p>
+
+    <h3>General &amp; Groups</h3>
+    <ul>
+        <li><strong>POST</strong> <code>/init</code> — Initialize or get an individual conversation with another user. Body: <code>{ userId: string }</code></li>
+        <li><strong>POST</strong> <code>/group</code> — Create a new group conversation. Body: <code>{ name: string, memberIds: string[], description?: string, avatarUrl?: string }</code></li>
+        <li><strong>PATCH</strong> <code>/group/:id</code> — Update a group conversation (name, members, avatar, etc.).</li>
+        <li><strong>DELETE</strong> <code>/:id</code> — Delete a conversation entirely.</li>
+        <li><strong>DELETE</strong> <code>/group/:id/member/:memberId</code> — Remove a member from a group.</li>
+    </ul>
+
+    <h3>Conversation Management</h3>
+    <ul>
+        <li><strong>PATCH</strong> <code>/:id/accept-request</code> — Accept a pending message request.</li>
+        <li><strong>PATCH</strong> <code>/:id/decline-request</code> — Decline a pending message request.</li>
+        <li><strong>PATCH</strong> <code>/:id/unread</code> — Toggle unread status of a conversation.</li>
+        <li><strong>DELETE</strong> <code>/:id/delete-for-me</code> — Delete the conversation history for the current user only.</li>
+        <li><strong>PATCH</strong> <code>/:id/pin</code> — Toggle pinned status.</li>
+        <li><strong>PATCH</strong> <code>/:id/mute</code> — Toggle mute status. Body: <code>{ isMuted: boolean, mutedUntil?: string (ISO DateTime) }</code></li>
+        <li><strong>PATCH</strong> <code>/:id/block</code> — Toggle blocked status.</li>
+        <li><strong>POST</strong> <code>/:id/report</code> — Report a conversation. Body: <code>{ reason: string }</code></li>
+    </ul>
+
+    <h3>Advanced Message Actions</h3>
+    <ul>
+        <li><strong>POST</strong> <code>/message/:messageId/react</code> — React to a message. Body: <code>{ emoji: "👍" }</code></li>
+        <li><strong>DELETE</strong> <code>/message/:messageId/react</code> — Remove a reaction. Body: <code>{ emoji: "👍" }</code></li>
+        <li><strong>POST</strong> <code>/message/:messageId/reply</code> — Reply directly to a message. Body: <code>{ content?: string, mediaUrl?: string, mediaType?: Enum }</code></li>
+        <li><strong>POST</strong> <code>/message/:messageId/forward</code> — Forward a message. Body: <code>{ toConversationId: string }</code></li>
+        <li><strong>POST</strong> <code>/message/:messageId/unsend</code> — Unsend (delete for everyone) a message.</li>
+        <li><strong>DELETE</strong> <code>/message/:messageId/delete-for-me</code> — Delete a message for the current user only.</li>
+    </ul>
+
+</body>
+</html>

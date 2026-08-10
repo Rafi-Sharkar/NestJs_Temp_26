@@ -1,0 +1,70 @@
+// Generic "charge a saved card" payment record. Any feature (donation, campaign, etc.)
+// can trigger a charge via the payments/charge module; this table is the resulting record.
+model Payment {
+  id      String @id @default(uuid())
+  payerId String
+  payer   User   @relation("PaymentsMade", fields: [payerId], references: [id], onDelete: Cascade)
+
+  // Optional payee (brand/creator) who should eventually receive payeeAmount via a Connect transfer.
+  // When absent, the full amount stays with the platform.
+  payeeUserId String?
+  payee       User?   @relation("PaymentsReceived", fields: [payeeUserId], references: [id])
+
+  stripePaymentIntentId String? @unique
+  stripeCustomerId      String?
+
+  amount            Int // in the smallest currency unit (e.g. cents)
+  currency          String @default("usd")
+  platformFeeAmount Int    @default(0)
+  payeeAmount       Int    @default(0)
+
+  status        PaymentStatus @default(PENDING)
+  description   String?
+  failureReason String?
+
+  transfer Transfer?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([payerId])
+  @@index([payeeUserId])
+  @@map("payments")
+}
+
+// Records the on-demand movement of a payee's share out of the platform's Stripe
+// account into their connected account (mirrors Stripe's "separate charges and
+// transfers" pattern — never automatic, always explicitly triggered).
+model Transfer {
+  id        String  @id @default(uuid())
+  paymentId String  @unique
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  payeeUserId String
+  payee       User   @relation("TransfersReceived", fields: [payeeUserId], references: [id])
+
+  stripeTransferId String?        @unique
+  amount           Int
+  currency         String         @default("usd")
+  status           TransferStatus @default(PENDING)
+  failureReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([payeeUserId])
+  @@map("transfers")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}

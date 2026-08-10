@@ -1,0 +1,17 @@
+packages:
+  - "."
+
+allowBuilds:
+  '@firebase/util': false
+  '@nestjs/core': false
+  '@prisma/engines': false
+  '@scarf/scarf': false
+  bcrypt: false
+  msgpackr-extract: false
+  prisma: false
+  protobufjs: false
+  sharp: false
+  unrs-resolver: false
+
+onlyBuiltDependencies:
+  - "*"

@@ -1,0 +1,53 @@
+import { UserEnum } from '@/common/enum/user.enum';
+import {
+  applyDecorators,
+  createParamDecorator,
+  ExecutionContext,
+  SetMetadata,
+  UseGuards,
+} from '@nestjs/common';
+import { IS_PUBLIC_KEY, ROLES_KEY } from './jwt.constants';
+import { JwtAuthGuard, RolesGuard } from './jwt.guard';
+import { JWTPayload, RequestWithUser } from './jwt.interface';
+
+// Roles metadata
+export const Roles = (...roles: UserEnum[]) => SetMetadata(ROLES_KEY, roles);
+
+// Public decorator to skip auth guards
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+// GetUser decorator
+export const GetUser = createParamDecorator(
+  (data: keyof JWTPayload | undefined, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest<RequestWithUser>();
+    const user = request.user as JWTPayload | undefined;
+    if (!user) return undefined;
+    if (!data) return user;
+    return user[data];
+  },
+);
+
+// Composite decorator - apply guards and optional role metadata
+export function ValidateAuth(...roles: UserEnum[]) {
+  const decorators = [UseGuards(JwtAuthGuard, RolesGuard)];
+  if (roles.length > 0) {
+    decorators.push(Roles(...roles));
+  }
+  return applyDecorators(...decorators);
+}
+
+export function ValidateAdmin() {
+  return ValidateAuth(UserEnum.ADMIN);
+}
+
+export function ValidateEmployer() {
+  return ValidateAuth(UserEnum.EMPLOYER, UserEnum.ADMIN);
+}
+
+export function ValidateEmployee() {
+  return ValidateAuth(UserEnum.EMPLOYEE, UserEnum.ADMIN);
+}
+
+export function ValidateUser() {
+  return ValidateAuth(UserEnum.ADMIN, UserEnum.EMPLOYER, UserEnum.EMPLOYEE);
+}
